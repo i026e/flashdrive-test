@@ -1,2 +1,2 @@
 # flashdrive-test
-Linux utility to test capacity of USB flashdrives / memory cards
+python utility to test capacity of USB flashdrives / memory cards under Linux 
