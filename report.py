@@ -10,7 +10,19 @@ import disk_operations as dsk_opr
 
 from utils import safe_get, pretty_disk_size, pretty_time_diff, pretty_speed
 
-template = """
+info_template = """
+Device: {device}
+Block device: {block_device}
+Capacity: {pretty_capacity}
+
+Number of sectors: {num_sectors}
+Sector size: {sector_size} bytes
+
+Mounted as:
+{mnt_points}
+"""
+
+report_template = """
 REPORT
 ----------------------------------------
 Test of {device}
@@ -44,6 +56,23 @@ Bad sectors:
 ----------------------------------------
 """
 
+def info_generator(device):
+    block_device = safe_get(dsk_opr.block_path, device, device)
+    pretty_capacity = pretty_disk_size(safe_get(dsk_opr.size, 0, device))
+    num_sectors = safe_get(dsk_opr.num_sectors, 0, device)
+    sector_size = safe_get(dsk_opr.sector_size, 0, device)
+    
+    mnt_points = "\n".join(safe_get(dsk_opr.mount_points, [], device))
+    
+    info = info_template.format(device = device,
+                                block_device = block_device,
+                                pretty_capacity = pretty_capacity,
+                                num_sectors = num_sectors,
+                                sector_size = sector_size,
+                                mnt_points = mnt_points,
+                                )
+    return info
+
 def report_generator(device, bad_sectors, write_speed, read_speed, timer):
     sector_size = safe_get(dsk_opr.sector_size, 0, device)
     capacity = safe_get(dsk_opr.size, 0, device)
@@ -74,7 +103,7 @@ def report_generator(device, bad_sectors, write_speed, read_speed, timer):
     
     bad_list = "\n".join(str(gr) for gr in bad_sectors.get_bad_groups())
     
-    report = template.format(device = device,
+    report = report_template.format(device = device,
                              capacity = capacity,
                              pretty_capacity = pretty_capacity,
                              num_sectors = num_sectors,

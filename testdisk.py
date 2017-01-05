@@ -83,24 +83,24 @@ class EventHandler:
                 
         self.bads = BadSectors(start_sector)
         self.write_speed = Speed(sector_size, start_sector)
-        self.read_speed = Speed(sector_size, start_sector)
+        self.read_speed = Speed(sector_size, start_sector)        
         
-        print(start_sector, stop_sector)
         self.percent_done = Percent(start_sector, stop_sector, 2)
         self.timer = Timer(0, 100) # percents
         
         self.listeners = {"finish": [],
                           "cancel": [],
                           "progress" : [],
-                          "update" : [] }
+                          "update" : [],
+                          "error" : []}
                           
-    def add_listener(self, event, func, *user_data):
+    def add_callback(self, event, func, *user_data):
         if event in self.listeners:
             self.listeners[event].append((func, user_data))        
         
-    def _on_status_update(self, old_status, new_status, data):
+    def _on_status_update(self, old_status, new_status):
         for listener, user_data in self.listeners["update"]:
-            listener(old_status, new_status, data, *user_data)
+            listener(old_status, new_status, *user_data)
              
     def _on_finish(self, is_ok): 
         if is_ok:
@@ -111,7 +111,11 @@ class EventHandler:
     def _on_cancel(self, is_ok):
         if is_ok:
             for listener, user_data in self.listeners["cancel"]:
-                listener(*user_data)
+                listener(self.bads, self.write_speed, self.read_speed, self.timer, *user_data)
+                
+    def _on_error(self, err):
+        for listener, user_data in self.listeners["error"]:
+            listener(err, *user_data)
     
     def _on_progress(self, group_val, gr_start_sector, gr_num_sectors, 
                     speed, percent, elapsed_time, left_time):
@@ -184,11 +188,7 @@ class DriveTest:
         
         print(self.start_sector, self.stop_sector)
         self.handler = EventHandler(update_period, self.dev_sector_size,
-                                    self.start_sector, self.stop_sector)
-        
-
-        
-        
+                                    self.start_sector, self.stop_sector) 
         
         self.num_sectors_test = self.stop_sector - self.start_sector + 1
         
@@ -202,13 +202,13 @@ class DriveTest:
         self.stop_sector = max(self.start_sector, min(stop, self.dev_sectors - 1))   
 
         
-    def _update_status(self, new_status, comment):
+    def _update_status(self, new_status):
         # args may contain some additional information
         if ((self.status != STATUS_CANCELLED) and
             (self.status != STATUS_FINISHED) and
             (self.status != STATUS_ERROR) ):
             
-            self.handler._on_status_update(self.status, new_status, comment)           
+            self.handler._on_status_update(self.status, new_status)           
             self.status = new_status
             return True            
         
@@ -222,16 +222,17 @@ class DriveTest:
 
         
     def prepare(self):
-        if self._update_status(STATUS_PREPARING, ""):
+        if self._update_status(STATUS_PREPARING):
             try:
                 dsk_opr.unmount(self.dev)
             except Exception as e:
-                self._update_status(STATUS_ERROR, e)
+                self._update_status(STATUS_ERROR)
+                self.handler._on_error(e)
             finally:
                 self.handler._on_prepare()
         
     def write(self):
-        if self._update_status(STATUS_WRITING, ""):
+        if self._update_status(STATUS_WRITING):
             self.handler._on_write_begin()
             try:
                 for (ind_, bytes_w) in dsk_opr.write(self.dev, 
@@ -246,19 +247,22 @@ class DriveTest:
                     result = (bytes_w == self.dev_sector_size)             
                     self.handler._on_write_progress(ind_, result)
             except Exception as e:
-                self._update_status(STATUS_ERROR, e)
+                self._update_status(STATUS_ERROR)
+                self.handler._on_error(e)
             finally:
                 self.handler._on_write_end()
            
             
     def compare(self):
-        if self._update_status(STATUS_COMPARING, ""):
+        if self._update_status(STATUS_COMPARING):
             self.handler._on_compare_begin()          
             try:                
                 for (ind_, data) in dsk_opr.read(self.dev,
                                             self.dev_sector_size,
                                             self.start_sector,
                                             self.num_sectors_test): 
+                    
+                    if self.is_cancelled():  break
                 
                     control_data = data_gen.get_data(ind_, self.dev_sector_size)
                     result = (data == control_data)
@@ -266,18 +270,18 @@ class DriveTest:
                     self.handler._on_compare_progress(ind_, result)            
 
             except Exception as e:
-                self._update_status(STATUS_ERROR, e)
-                
+                self._update_status(STATUS_ERROR)
+                self.handler._on_error(e)
             finally:
                 self.handler._on_compare_end()
                 
     def finish(self):
-        self._update_status(STATUS_FINISHED, "")
+        self._update_status(STATUS_FINISHED)
         self.handler._on_finish(self.is_finished()) 
 
             
     def cancel(self):
-        self._update_status(STATUS_CANCELLED, "Cancelled by user") 
+        self._update_status(STATUS_CANCELLED) 
         self.handler._on_cancel(self.is_cancelled)
                 
     def is_cancelled(self):
@@ -286,8 +290,8 @@ class DriveTest:
     def is_finished(self):
         return self.status == STATUS_FINISHED
         
-    def add_callback(self, event, func, *user_data):
-        self.handler.add_listener(event, func, *user_data)
+    def get_handler(self):
+        return self.handler
         
             
 

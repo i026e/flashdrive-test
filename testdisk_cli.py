@@ -13,7 +13,7 @@ import utils
 import testdisk
 import const
 
-from report import report_generator
+from report import report_generator, info_generator
     
 def list_(*args, **kwargs):
     for device in disk_operations.detect_devs():
@@ -39,20 +39,8 @@ def info_(device=None, **kwargs):
         devices = [device]
         
     for dev in devices:
-        print("Device:", dev)    
-        print("Block device:", disk_operations.block_path(dev))
-        
-        size = utils.pretty_disk_size(disk_operations.size(dev))
-        print("Capacity:", size)
-        
-        sectors = disk_operations.num_sectors(dev)
-        sec_size = disk_operations.sector_size(dev)
-        print(sectors, "sectors of", sec_size, "bytes")        
-        
-        print("Mounted as:")        
-        for point in disk_operations.mount_points(dev):
-            print(point)    
-        
+        dev_info = info_generator(dev)
+        print(dev_info)          
         print() 
     
 def help_(*args, **kwargs):
@@ -69,10 +57,13 @@ def help_(*args, **kwargs):
         -s=start : begin test from this sector
         -e=end : stop test after this sector""")
         
-def _on_status_changed(old_status, new_status, comment) :
+def _on_status_changed(old_status, new_status) :
     print()    
-    print(testdisk.get_status_name(new_status), comment)
+    print(testdisk.get_status_name(new_status))
     print()
+    
+def _on_error(err):
+    print("Unexpected error:", err)
     
 def _on_progress(group_val, gr_start_sector, gr_num_sectors,
                  speed, percent, elapsed_time, left_time, num_sectors):   
@@ -107,9 +98,11 @@ def test_(device, start=0, end=-1):
         return
     """    
     test = testdisk.DriveTest(device, start_sector = start, stop_sector = end)
-    test.add_callback("update", _on_status_changed)
-    test.add_callback("progress", _on_progress, test.num_sectors_test)
-    test.add_callback("finish", _on_finish, device)
+    handler = test.get_handler()
+    handler.add_callback("error", _on_error)
+    handler.add_callback("update", _on_status_changed)
+    handler.add_callback("progress", _on_progress, test.num_sectors_test)
+    handler.add_callback("finish", _on_finish, device)
     test.test()    
 
   
