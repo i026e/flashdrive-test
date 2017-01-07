@@ -12,6 +12,7 @@ import disk_operations
 import utils
 import testdisk
 import const
+import filesave
 
 from report import report_generator, info_generator
     
@@ -66,25 +67,27 @@ def _on_error(err):
     print("Unexpected error:", err)
     
 def _on_progress(group_val, gr_start_sector, gr_num_sectors,
-                 speed, percent, elapsed_time, left_time, num_sectors):   
+                 speed, percent, elapsed_time, left_time, start, num_sectors):   
     message = "Progress {percent} ({sec} of {num_sec}) \n Elaps.Time: {elp}, \t Time Left: {left}, \t Avg.speed {speed}"
     
     
     sys.stdout.write(const.LINE_UP_SYMB)
     sys.stdout.write(const.CAR_BACK_SYMB)
     sys.stdout.write(message.format(percent = utils.pretty_percent(percent), 
-                                    sec = gr_start_sector + gr_num_sectors,
+                                    sec = gr_start_sector + gr_num_sectors + start,
                                     num_sec = num_sectors,
                                     elp = utils.pretty_time_diff(elapsed_time),
                                     left = utils.pretty_time_diff(left_time),
                                     speed = utils.pretty_speed(speed)))
     sys.stdout.flush()
     
-def _on_finish(bads, write_speed, read_speed, timer, device):    
+def _on_finish(bads, write_speed, read_speed, timer, device):
+    rep = report_generator(device, bads, write_speed, read_speed, timer)
     print()
     print("====================")
-    print(report_generator(device, bads, write_speed, read_speed, timer))
+    print(rep)
     print("====================")
+    filesave.autosave(rep)
         
 def test_(device, start=0, end=-1):  
     if not check_device_exists(device):
@@ -101,7 +104,7 @@ def test_(device, start=0, end=-1):
     handler = test.get_handler()
     handler.add_callback("error", _on_error)
     handler.add_callback("update", _on_status_changed)
-    handler.add_callback("progress", _on_progress, test.num_sectors_test)
+    handler.add_callback("progress", _on_progress, start, test.num_sectors_test)
     handler.add_callback("finish", _on_finish, device)
     test.test()    
 

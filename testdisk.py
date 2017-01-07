@@ -145,7 +145,7 @@ class EventHandler:
         if result is not None:
             group_val, gr_start_sector, gr_num_sectors = result
             speed = self.write_speed.estimate(sector_index)
-            percent = self.percent_done.get_percent_done(sector_index, 1)
+            percent = self.percent_done.get_percent_done(sector_index, 0)
             
             elapsed_time, left_time = self.timer.estimate(percent)
             
@@ -161,7 +161,7 @@ class EventHandler:
             group_val, gr_start_sector, gr_num_sectors = result
             speed = self.read_speed.estimate(sector_index)
             
-            percent = self.percent_done.get_percent_done(sector_index, 2)
+            percent = self.percent_done.get_percent_done(sector_index, 1)
             elapsed_time, left_time = self.timer.estimate(percent)
             
             self._on_progress(group_val, gr_start_sector, gr_num_sectors, 
@@ -216,7 +216,7 @@ class DriveTest:
 
     def test(self):
         self.prepare()
-        #self.write()
+        self.write()
         self.compare()
         self.finish()
 

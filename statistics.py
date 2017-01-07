@@ -12,10 +12,11 @@ class Percent:
         self._init_val = init_val
         self._final_val = final_val
         
-        self.total_work = (final_val - init_val)*num_stages
+        self.stage_work = final_val - init_val
+        self.total_work = self.stage_work*num_stages
         
     def get_percent_done(self, current_val, current_stage):
-        return 100.0 * (current_val * current_stage - self._init_val) / self.total_work
+        return 100.0 * (current_val + self.stage_work * current_stage - self._init_val) / self.total_work
 
 class Timer:
     def __init__(self, init_val, final_val):
@@ -42,8 +43,7 @@ class Timer:
         return elapsed, estimated_left
         
     def get_total_time(self):
-        return self._last_time - self._start_time
-    
+        return self._last_time - self._start_time    
         
         
 class Speed:
