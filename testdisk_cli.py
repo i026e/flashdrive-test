@@ -56,7 +56,8 @@ def help_(*args, **kwargs):
     print()
     print("""Options:
         -s=start : begin test from this sector
-        -e=end : stop test after this sector""")
+        -e=end : stop test after this sector
+        -o=output_file : save report to this file""")
         
 def _on_status_changed(old_status, new_status) :
     print()    
@@ -67,29 +68,37 @@ def _on_error(err):
     print("Unexpected error:", err)
     
 def _on_progress(group_val, gr_start_sector, gr_num_sectors,
-                 speed, percent, elapsed_time, left_time, start, num_sectors):   
+                 speed, percent, elapsed_time, left_time, num_sectors):   
     message = "Progress {percent} ({sec} of {num_sec}) \n Elaps.Time: {elp}, \t Time Left: {left}, \t Avg.speed {speed}"
     
     
     sys.stdout.write(const.LINE_UP_SYMB)
     sys.stdout.write(const.CAR_BACK_SYMB)
     sys.stdout.write(message.format(percent = utils.pretty_percent(percent), 
-                                    sec = gr_start_sector + gr_num_sectors + start,
+                                    sec = gr_start_sector + gr_num_sectors,
                                     num_sec = num_sectors,
                                     elp = utils.pretty_time_diff(elapsed_time),
                                     left = utils.pretty_time_diff(left_time),
                                     speed = utils.pretty_speed(speed)))
     sys.stdout.flush()
     
-def _on_finish(bads, write_speed, read_speed, timer, device):
+def _on_finish(bads, write_speed, read_speed, timer, device, output):
     rep = report_generator(device, bads, write_speed, read_speed, timer)
     print()
     print("====================")
     print(rep)
     print("====================")
-    filesave.autosave(rep)
+    
+    filesave.autosave(device, rep)
+    
+    if output is not None:
+        output = os.path.expanduser(output)
+        err = filesave.save(output, rep)
+        if err is not None:
+            print("Problem with file", output)
+            print(err)
         
-def test_(device, start=0, end=-1):  
+def test_(device, start=0, end=-1, output=None):  
     if not check_device_exists(device):
         return
     info_(device)
@@ -104,8 +113,8 @@ def test_(device, start=0, end=-1):
     handler = test.get_handler()
     handler.add_callback("error", _on_error)
     handler.add_callback("update", _on_status_changed)
-    handler.add_callback("progress", _on_progress, start, test.num_sectors_test)
-    handler.add_callback("finish", _on_finish, device)
+    handler.add_callback("progress", _on_progress, start + test.num_sectors_test - 1)
+    handler.add_callback("finish", _on_finish, device, output)
     test.test()    
 
   
@@ -115,8 +124,9 @@ if __name__ == "__main__":
                 "info" : info_,
                 "test" : test_}
     
-    param_shortcuts = {"s" : "start",
-                       "e" : "end" }
+    param_shortcuts = {"s" : ("start", int),
+                       "e" : ("end", int) ,
+                       "o" : ("output", str)}
     command = "help"
     device = None
     params = {}   
@@ -135,8 +145,8 @@ if __name__ == "__main__":
                 name = param[:eq_pos].strip("-")
                 val = param[eq_pos+1:]
                 
-                name = param_shortcuts.get(name, name)                    
-                params[name] = val
+                name, type_ = param_shortcuts.get(name, (name, str))                  
+                params[name] = type_(val)
                 
                 
     func = commands.get(command, help_)
